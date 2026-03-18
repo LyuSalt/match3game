@@ -1,60 +1,73 @@
+using System.Collections.Generic;
 using UnityEngine;
+using System;
+using System.Collections;
 
 public class Cell : MonoBehaviour
 {
     public int row;
     public int col;
-    protected GameManager gameManager;
     protected SpriteRenderer spriteRenderer;
-    
+    public GemType Type;  // клетка хранит свой тип. тут живёт "номер"
+
     void Awake()
     {
-        // Получаем или добавляем SpriteRenderer
         spriteRenderer = GetComponent<SpriteRenderer>();
         if (spriteRenderer == null)
             spriteRenderer = gameObject.AddComponent<SpriteRenderer>();
-        
-        // Добавляем коллайдер для кликов
+
         BoxCollider2D collider = GetComponent<BoxCollider2D>();
         if (collider == null)
             gameObject.AddComponent<BoxCollider2D>();
     }
-    
-    public virtual void Initialize(GameManager manager, int row, int col)
+
+    public virtual void Initialize(int row, int col)  
     {
-        this.gameManager = manager;
         this.row = row;
         this.col = col;
     }
-    
+
+    //удаление совпадений
     public virtual void OnMatch()
     {
-        if (gameManager != null)
-            gameManager.MarkCellToDelete(row, col);
+        //GameManager.Instance.OnCellsToDelete.Invoke();
+        // Пока пусто — ждём OnCellsToDelete
+        Debug.Log($"Cell [{row},{col}] удаляется! Тип: {Type}");
+        StartCoroutine(ScaleDestroy(0.3f));
     }
-    
+
     public virtual void OnSwap()
     {
-        // Можно добавить эффекты при обмене
+        Debug.Log($"Cell [{row},{col}] участвует в обмене");
+        // Здесь эффекты обмена: мигание, звук
     }
-    
-    // Метод для установки спрайта
-    public void SetSprite(Sprite sprite)
+
+    public void SetSpriteAndType(Sprite sprite, GemType type)
     {
-        if (spriteRenderer != null)
-            spriteRenderer.sprite = sprite;
+        Type = type;                 // запоминаем тип
+        spriteRenderer.sprite = sprite;  // ставим картинку
     }
-    
-    // Метод для получения текущего спрайта
+
     public Sprite GetSprite()
     {
         return spriteRenderer != null ? spriteRenderer.sprite : null;
     }
-    
-    // Этот метод будет вызываться при клике
+
     void OnMouseDown()
     {
-        if (gameManager != null)
-            gameManager.OnCellClicked(row, col);
+        Vector2Int myPos = new Vector2Int(row, col);
+        GameManager.Instance.OnCellClicked.Invoke(myPos);  // ✅ СОБЫТИЕ!
+    }
+    private IEnumerator ScaleDestroy(float duration)
+    {
+        Vector3 startScale = transform.localScale;
+        float elapsed = 0;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            transform.localScale = Vector3.Lerp(startScale, Vector3.zero, elapsed / duration);
+            yield return null;
+        }
     }
 }

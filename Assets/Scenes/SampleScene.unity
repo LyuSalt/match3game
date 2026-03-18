@@ -249,13 +249,37 @@ MonoBehaviour:
   columns: 5
   cellPrefab: {fileID: 1388080956540613203, guid: f44a94ae86552b14ca20de4ac0ff3c31, type: 3}
   gemSprites:
-  - {fileID: 21300000, guid: 42dd346b733da1c46b67bb6ee1332cbe, type: 3}
-  - {fileID: 21300000, guid: 3dfa7b93eefca7449b2987962b552ce6, type: 3}
   - {fileID: 21300000, guid: d127f4aada9b1dd458661c9592e771d1, type: 3}
-  - {fileID: 21300000, guid: 41be04b31a12e3f4fac211722a6b6513, type: 3}
+  - {fileID: 21300000, guid: 42dd346b733da1c46b67bb6ee1332cbe, type: 3}
   - {fileID: 21300000, guid: 9ac571afc37b01e45b63d9b8bf4d982d, type: 3}
   - {fileID: 21300000, guid: 8b4679a2833961049984ed324da066ab, type: 3}
+  - {fileID: 21300000, guid: 41be04b31a12e3f4fac211722a6b6513, type: 3}
+  - {fileID: 21300000, guid: 3dfa7b93eefca7449b2987962b552ce6, type: 3}
   cellSpacing: 1.5
+  OnCellClicked:
+    m_PersistentCalls:
+      m_Calls:
+      - m_Target: {fileID: 746260088}
+        m_TargetAssemblyTypeName: GameManager, Assembly-CSharp
+        m_MethodName: OnCellClickedEvent
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
+  OnCellsSwapped:
+    m_PersistentCalls:
+      m_Calls: []
+  OnMatchFound:
+    m_PersistentCalls:
+      m_Calls: []
+  OnCellsToDelete:
+    m_PersistentCalls:
+      m_Calls: []
 --- !u!4 &746260089
 Transform:
   m_ObjectHideFlags: 0
