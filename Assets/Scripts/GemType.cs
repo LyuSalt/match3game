@@ -7,5 +7,6 @@ public enum GemType
     Green = 2,
     Yellow = 3,
     Purple = 4,
-    White = 5
+    White = 5,
+    Bomb = 6
 }

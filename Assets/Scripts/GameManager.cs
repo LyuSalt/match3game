@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using Unity.VisualScripting;
 using System.Collections;
 using System;
+using DG.Tweening;
+using Random = UnityEngine.Random;
 
 [System.Serializable] // сделать видимым в инспекторе
 public class Vector2IntEvent : UnityEvent<Vector2Int> { }
@@ -11,7 +13,8 @@ public class Vector2IntEvent : UnityEvent<Vector2Int> { }
 public class Vector2Int2Event : UnityEvent<Vector2Int, Vector2Int> { }
 [System.Serializable]
 public class Vector2IntListEvent : UnityEvent<List<Vector2Int>> { }
-
+[System.Serializable]
+public class BombExplodedEvent : UnityEvent<Vector2Int, List<Vector2Int>> { }
 
 public class GameManager : MonoBehaviour
 {
@@ -34,11 +37,13 @@ public class GameManager : MonoBehaviour
     public Vector2Int2Event OnCellsSwapped;         // Обмен [pos1,pos2]
     public Vector2IntListEvent OnMatchFound;        // Матч!
     public Vector2IntListEvent OnCellsToDelete;     // Удалить клетки
+    public BombExplodedEvent OnBombExploded;        //бомба взорвалась и задела клетки!
 
     // Данные игры
     private Cell[,] cells;
     private GameObject[,] cellObjects;
     public List<(int, int)> cellsToDelete = new List<(int, int)>();
+    private bool isAnimating = false; // блокировка кликов и действий
 
     // Для выбора клеток
     private Vector2Int firstSelectedPos = new Vector2Int(-1, -1); // первая выбранная клетка, пока тут несуществующие координаты
@@ -61,7 +66,7 @@ public class GameManager : MonoBehaviour
     {
         Debug.Log("Игра началась!");
         InitializeBoard();
-        CreateVisualBoard();
+        CreateVisualBoardWithoutMatches();
         if (OnCellClicked == null)
         {
             OnCellClicked = new Vector2IntEvent();
@@ -120,9 +125,28 @@ public class GameManager : MonoBehaviour
             }
         }
     }
-
+    private void SyncCellsWithObjects()
+    {
+        for (int i = 0; i < rows; i++)
+        {
+            for (int j = 0; j < columns; j++)
+            {
+                if (cellObjects[i, j] != null)
+                {
+                    Cell cell = cellObjects[i, j].GetComponent<Cell>();
+                    cells[i, j] = cell;
+                    // координаты уже обновлены в ShuffleObjects
+                }
+                else
+                {
+                    cells[i, j] = null;
+                }
+            }
+        }
+    }
     void OnCellClickedEvent(Vector2Int position)
     {
+        if (isAnimating) return; // если идёт анимация – игнорируем клики
         int row = position.x, col = position.y;
 
         // ✅ ПРОВЕРКА: поле готово?
@@ -177,61 +201,245 @@ public class GameManager : MonoBehaviour
                     }
                 }
             }
-
             firstSelectedPos = new Vector2Int(-1, -1);  // ✅ СБРОС
         }
-        //int row = position.x, col = position.y;
-
-
-        //if (cells[row, col] == null || cellObjects[row, col] == null)
-        //    return;
-
-        //Debug.Log($"Клик по клетке: [{row},{col}]");
-
-        //if (firstSelectedPos.x == -1) // Первый выбор
-        //{
-        //    firstSelectedPos = position;
-        //    firstSelectedObject = cellObjects[row, col];
-        //    firstSelectedObject.transform.localScale = Vector3.one * 1.2f;
-        //    Debug.Log($"Выбрана первая клетка: [{row},{col}]");
-        //}
-        //else // Второй выбор
-        //{
-        //    Debug.Log($"Выбрана вторая клетка: [{row},{col}]");
-        //    firstSelectedObject.transform.localScale = Vector3.one;
-
-        //    if (IsAdjacent(firstSelectedPos.x, firstSelectedPos.y, row, col))
-        //    { 
-        //        Debug.Log("Клетки соседние! Меняем местами...");
-        //        // 1. меняем местами
-        //        SwapCellObjects(firstSelectedPos.x, firstSelectedPos.y, row, col);
-        //        // 2. проверяем, случилось ли что-то полезное
-        //        bool ok = CheckAfterSwap(firstSelectedPos, position);
-
-        //        if (ok)
-        //        {
-        //            // ход корректный: можно оповестить, что свап принят
-        //            OnCellsSwapped?.Invoke(firstSelectedPos, position);
-        //            ProcessMatchesAfterSwap(); // ✅ ОСНОВНОЙ ВЫЗОВ!
-        //        }
-        //        else
-        //        {
-        //            // хода нет – откатываем назад
-        //            Debug.Log("Совпадений нет, откатываем ход");
-        //            SwapCellObjects(firstSelectedPos.x, firstSelectedPos.y, row, col);
-        //        }
-        //    }
-        //    else
-        //    {
-        //        Debug.Log("Клетки НЕ соседние!");
-        //    }
-
-        //    firstSelectedPos = new Vector2Int(-1, -1);
-        //    firstSelectedObject = null;
-        //}
     }
 
-    
+    private IEnumerator AnimatedSwap(int r1, int c1, int r2, int c2, float duration = 0.15f)
+    {
+        // Получаем объекты
+        GameObject obj1 = cellObjects[r1, c1];
+        GameObject obj2 = cellObjects[r2, c2];
+        if (obj1 == null || obj2 == null) yield break;
+
+        // Запоминаем начальные позиции
+        Vector3 pos1 = obj1.transform.position;
+        Vector3 pos2 = obj2.transform.position;
+
+        // Запускаем анимацию перемещения
+        obj1.transform.DOMove(pos2, duration).SetEase(Ease.InOutQuad);
+        obj2.transform.DOMove(pos1, duration).SetEase(Ease.InOutQuad);
+
+        // Ждём окончания анимации
+        yield return new WaitForSeconds(duration);
+
+        // Теперь объекты физически на новых местах, обновляем данные
+        // Меняем местами в массивах (как в SwapCellObjects)
+        Cell tempCell = cells[r1, c1];
+        cells[r1, c1] = cells[r2, c2];
+        cells[r2, c2] = tempCell;
+
+        GameObject tempObj = cellObjects[r1, c1];
+        cellObjects[r1, c1] = cellObjects[r2, c2];
+        cellObjects[r2, c2] = tempObj;
+
+        // Обновляем координаты у объектов Cell
+        cells[r1, c1].row = r1; cells[r1, c1].col = c1;
+        cells[r2, c2].row = r2; cells[r2, c2].col = c2;
+
+        // (Необязательно) точная установка позиции, на случай если DOMove не довело до конца
+        cellObjects[r1, c1].transform.position = new Vector3(c1 * cellSpacing, r1 * cellSpacing, 0);
+        cellObjects[r2, c2].transform.position = new Vector3(c2 * cellSpacing, r2 * cellSpacing, 0);
+    }
+    private void ShuffleObjects()
+    {
+        // Собираем все объекты в список
+        List<GameObject> objectsList = new List<GameObject>();
+        for (int i = 0; i < rows; i++)
+        {
+            for (int j = 0; j < columns; j++)
+            {
+                if (cellObjects[i, j] != null)
+                    objectsList.Add(cellObjects[i, j]);
+            }
+        }
+
+        // Перемешиваем список
+        for (int i = 0; i < objectsList.Count; i++)
+        {
+            int randomIndex = UnityEngine.Random.Range(i, objectsList.Count);
+            GameObject temp = objectsList[i];
+            objectsList[i] = objectsList[randomIndex];
+            objectsList[randomIndex] = temp;
+        }
+
+        // Раскладываем объекты обратно в массив по порядку
+        int index = 0;
+        for (int i = 0; i < rows; i++)
+        {
+            for (int j = 0; j < columns; j++)
+            {
+                if (index < objectsList.Count)
+                {
+                    cellObjects[i, j] = objectsList[index];
+                    // Обновляем координаты в компоненте Cell
+                    Cell cell = cellObjects[i, j].GetComponent<Cell>();
+                    if (cell != null)
+                    {
+                        cell.row = i;
+                        cell.col = j;
+                    }
+                    index++;
+                }
+                else
+                {
+                    cellObjects[i, j] = null;
+                }
+            }
+        }
+    }
+
+    private Vector3 FindObjectPosition(GameObject obj)
+    {
+        for (int i = 0; i < rows; i++)
+        {
+            for (int j = 0; j < columns; j++)
+            {
+                if (cellObjects[i, j] == obj)
+                {
+                    return new Vector3(j * cellSpacing, i * cellSpacing, 0);
+                }
+            }
+        }
+        return Vector3.zero;
+    }
+    private IEnumerator ShuffleBoardCoroutine()
+    {
+        isAnimating = true;
+
+        // 1. Сохраняем все объекты и их текущие позиции
+        List<GameObject> allObjects = new List<GameObject>();
+        Vector3 centerPos = new Vector3((columns - 1) * cellSpacing / 2f,
+                                        (rows - 1) * cellSpacing / 2f, 0);
+
+        for (int i = 0; i < rows; i++)
+        {
+            for (int j = 0; j < columns; j++)
+            {
+                if (cellObjects[i, j] != null)
+                {
+                    allObjects.Add(cellObjects[i, j]);
+                    // Отключаем коллайдеры, чтобы игрок не кликал во время анимации
+                    Collider2D col = cellObjects[i, j].GetComponent<Collider2D>();
+                    if (col != null) col.enabled = false;
+                }
+            }
+        }
+
+        // 2. Анимация СБОРКИ в центр
+        foreach (var obj in allObjects)
+        {
+            obj.transform.DOMove(centerPos, 0.4f)
+                .SetEase(Ease.InQuad);
+        }
+
+        yield return new WaitForSeconds(0.5f); // Ждём, пока все соберутся
+
+        // 3. ВСТРЯСКА (трясём каждый объект)
+        foreach (var obj in allObjects)
+        {
+            obj.transform.DOShakePosition(0.3f, 0.3f, 10, 90, false, true)
+                .SetEase(Ease.OutQuad);
+        }
+
+        // Даём немного времени на встряску
+        yield return new WaitForSeconds(0.4f);
+
+        // 4. Перемешиваем ТИПЫ фишек (логика)
+        ShuffleTypes();
+
+        // 5. Анимация РАЗБРОСА по новым позициям
+        // Для каждого объекта определяем новую позицию на основе обновлённых массивов
+        foreach (var obj in allObjects)
+        {
+            // Находим, где сейчас лежит этот объект в массиве (после перемешивания типов позиции не изменились)
+            // Но нам нужно, чтобы объект переместился на новое место, соответствующее новому типу?
+            // В нашей логике мы просто перемешали типы, но объекты остались на своих местах.
+            // Однако для эффекта "разброса" мы хотим, чтобы объекты физически перелетели на другие места,
+            // т.е. мы должны перемешать сами объекты между ячейками.
+            // Проще: мы можем перемешать объекты в массивах, а затем анимировать их перемещение.
+        }
+
+        // Поскольку мы перемешали только типы, а объекты остались на месте, то разброс не даст эффекта.
+        // Поэтому нам нужно также перемешать объекты между ячейками, чтобы они поменялись местами.
+        // Сделаем это:
+        ShuffleObjects();
+        SyncCellsWithObjects();
+        // Теперь объекты привязаны к новым позициям, анимируем их перемещение из центра в новые позиции.
+        foreach (var obj in allObjects)
+        {
+            Vector3 targetPos = FindObjectPosition(obj);
+            float delay = UnityEngine.Random.Range(0f, 0.1f);
+            obj.transform.DOMove(targetPos, 0.4f)
+                .SetDelay(delay)
+                .SetEase(Ease.OutBack); // пружинистый эффект
+        }
+
+        yield return new WaitForSeconds(0.6f); // Ждём завершения разброса
+
+        // 6. Включаем коллайдеры обратно
+        foreach (var obj in allObjects)
+        {
+            Collider2D col = obj.GetComponent<Collider2D>();
+            if (col != null) col.enabled = true;
+        }
+
+        // 7. Проверяем наличие матчей после перемешивания
+        List<Vector2Int> matches = FindAllMatches();
+        if (matches.Count > 0)
+        {
+            Debug.Log("Перемешивание создало матчи!");
+            ProcessMatchesAfterSwap(); // запускаем каскад
+        }
+        else
+        {
+            // Если матчей нет – пробуем ещё раз или перегенерируем
+            Debug.Log("Матчей не появилось, перегенерируем поле.");
+            ClearBoard();
+            CreateVisualBoardWithoutMatches();
+        }
+
+        isAnimating = false;
+    }
+    private void ShuffleTypes()
+    {
+        // Собираем все типы в список
+        List<GemType> allTypes = new List<GemType>();
+        for (int i = 0; i < rows; i++)
+        {
+            for (int j = 0; j < columns; j++)
+            {
+                if (cells[i, j] != null)
+                    allTypes.Add(cells[i, j].Type);
+            }
+        }
+
+        // Перемешиваем список (Fisher-Yates)
+        for (int i = 0; i < allTypes.Count; i++)
+        {
+            int randomIndex = UnityEngine.Random.Range(i, allTypes.Count);
+            GemType temp = allTypes[i];
+            allTypes[i] = allTypes[randomIndex];
+            allTypes[randomIndex] = temp;
+        }
+
+        // Раздаём перемешанные типы обратно ячейкам
+        int index = 0;
+        for (int i = 0; i < rows; i++)
+        {
+            for (int j = 0; j < columns; j++)
+            {
+                if (cells[i, j] != null)
+                {
+                    cells[i, j].Type = allTypes[index];
+                    // Обновляем спрайт в соответствии с новым типом
+                    Sprite newSprite = gemSprites[(int)allTypes[index]];
+                    cells[i, j].SetSpriteAndType(newSprite, allTypes[index]);
+                    index++;
+                }
+            }
+        }
+    }
     bool IsAdjacent(int row1, int col1, int row2, int col2)
     {
         int rowDiff = Mathf.Abs(row1 - row2);
@@ -392,13 +600,23 @@ public class GameManager : MonoBehaviour
 
     private IEnumerator DeleteAndRefill(List<Vector2Int> positions)
     {
-        yield return new WaitForSeconds(0.3f);
+        // Ждём, пока анимации удаления завершатся
+        yield return new WaitForSeconds(0.5f); // можно подобрать точнее
 
+        // Удаляем ссылки на уничтоженные объекты (сами объекты уже Destroy)
         foreach (var pos in positions)
         {
+            // Объект мог быть уже уничтожен анимацией, просто очищаем ссылки
             if (cellObjects[pos.x, pos.y] != null)
             {
+                // На всякий случай, если анимация не сработала
                 Destroy(cellObjects[pos.x, pos.y]);
+                cellObjects[pos.x, pos.y] = null;
+                cells[pos.x, pos.y] = null;
+            }
+            else
+            {
+                // Объект уже уничтожен, но ссылки могли остаться — чистим
                 cellObjects[pos.x, pos.y] = null;
                 cells[pos.x, pos.y] = null;
             }
@@ -467,65 +685,14 @@ public class GameManager : MonoBehaviour
         {
             if (!HasValidMoves())
             {
-                Debug.Log("⚠️ Нет ходов! Перегенерируем...");
+                Debug.Log("⚠️ Нет ходов! Запускаем анимацию перемешивания...");
                 ResetSelection();
                 yield return new WaitForSeconds(0.5f);
-                ClearBoard();
-                CreateVisualBoardWithoutMatches();  // ← без матчей!
+                yield return StartCoroutine(ShuffleBoardCoroutine());
             }
-            // Нет ходов → полная перегенерация!
-            //Debug.Log(" Мёртвое поле! Перегенерируем...");
-
-            //ClearBoard();
-            //CreateVisualBoard();
         }
     }
-    //bool CheckMatchesAt(int row, int col)
-    //{
-    //    GemType center = cells[row, col].Type;
-
-    //    bool found = false;
-
-    //    // --- горизонталь ---
-    //    // [col-2, col-1, col]
-    //    if (col >= 2 &&
-    //        cells[row, col - 1].Type == center &&
-    //        cells[row, col - 2].Type == center)
-    //        found = true;
-
-    //    // [col-1, col, col+1]
-    //    if (col >= 1 && col + 1 < columns &&
-    //        cells[row, col - 1].Type == center &&
-    //        cells[row, col + 1].Type == center)
-    //        found = true;
-
-    //    // [col, col+1, col+2]
-    //    if (col + 2 < columns &&
-    //        cells[row, col + 1].Type == center &&
-    //        cells[row, col + 2].Type == center)
-    //        found = true;
-
-    //    // --- вертикаль ---
-    //    // [row-2, row-1, row]
-    //    if (row >= 2 &&
-    //        cells[row - 1, col].Type == center &&
-    //        cells[row - 2, col].Type == center)
-    //        found = true;
-
-    //    // [row-1, row, row+1]
-    //    if (row >= 1 && row + 1 < rows &&
-    //        cells[row - 1, col].Type == center &&
-    //        cells[row + 1, col].Type == center)
-    //        found = true;
-
-    //    // [row, row+1, row+2]
-    //    if (row + 2 < rows &&
-    //        cells[row + 1, col].Type == center &&
-    //        cells[row + 2, col].Type == center)
-    //        found = true;
-
-    //    return found;
-    //}
+    
     private void CreateNewCell(int row, int col)
     {
         GameObject cellObj = Instantiate(cellPrefab);

@@ -2,7 +2,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using System;
 using System.Collections;
-
+using DG.Tweening;
+using Random = UnityEngine.Random;
 public class Cell : MonoBehaviour
 {
     public int row;
@@ -28,12 +29,39 @@ public class Cell : MonoBehaviour
     }
 
     //удаление совпадений
+
     public virtual void OnMatch()
     {
-        //GameManager.Instance.OnCellsToDelete.Invoke();
-        // Пока пусто — ждём OnCellsToDelete
-        Debug.Log($"Cell [{row},{col}] удаляется! Тип: {Type}");
-        StartCoroutine(ScaleDestroy(0.3f));
+        // Создаём 6 частиц (брызг)
+        for (int i = 0; i < 6; i++)
+        {
+            GameObject particle = new GameObject("Particle");
+            particle.transform.position = transform.position;
+            SpriteRenderer rend = particle.AddComponent<SpriteRenderer>();
+            rend.sprite = spriteRenderer.sprite; // копируем спрайт фишки
+            rend.color = spriteRenderer.color;
+            rend.sortingOrder = 1;
+
+            float angle = Random.Range(0, 360) * Mathf.Deg2Rad;
+            float distance = Random.Range(0.5f, 1.5f);
+            Vector2 direction = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+
+            // Анимация разлёта и исчезновения
+            Sequence seq = DOTween.Sequence();
+            seq.Append(particle.transform.DOMove((Vector2)transform.position + direction * distance, 0.3f)
+                .SetEase(Ease.OutQuad));
+            seq.Join(rend.DOFade(0, 0.3f));
+            seq.OnComplete(() => Destroy(particle));
+        }
+
+        // Основная анимация фишки (как выше)
+        transform.DOScale(1.3f, 0.1f)
+            .OnComplete(() =>
+            {
+                transform.DOScale(0f, 0.2f)
+                    .SetEase(Ease.InBack)
+                    .OnComplete(() => Destroy(gameObject));
+            });
     }
 
     public virtual void OnSwap()
@@ -58,7 +86,7 @@ public class Cell : MonoBehaviour
         Vector2Int myPos = new Vector2Int(row, col);
         GameManager.Instance.OnCellClicked.Invoke(myPos);  // ✅ СОБЫТИЕ!
     }
-    private IEnumerator ScaleDestroy(float duration)
+    protected IEnumerator ScaleDestroy(float duration)
     {
         Vector3 startScale = transform.localScale;
         float elapsed = 0;
