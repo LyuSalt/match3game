@@ -17,7 +17,7 @@ public class Menu : MonoBehaviour
     private AudioSource audioSource;
     private bool isProcessing = false; // Блокировка повторных кликов
 
-    void Start()
+    void Start() //настраивает AudioSource если есть звук
     {
         // Настраиваем AudioSource
         audioSource = GetComponent<AudioSource>();

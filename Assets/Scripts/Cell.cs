@@ -11,7 +11,7 @@ public class Cell : MonoBehaviour
     protected SpriteRenderer spriteRenderer;
     public GemType Type;  // клетка хранит свой тип. тут живёт "номер"
 
-    void Awake()
+    void Awake() //инициализация SpriteRenderer и BoxCollider2D.
     {
         spriteRenderer = GetComponent<SpriteRenderer>();
         if (spriteRenderer == null)
@@ -22,7 +22,7 @@ public class Cell : MonoBehaviour
             gameObject.AddComponent<BoxCollider2D>();
     }
 
-    public virtual void Initialize(int row, int col)  
+    public virtual void Initialize(int row, int col)  // установка координат
     {
         this.row = row;
         this.col = col;
@@ -30,7 +30,7 @@ public class Cell : MonoBehaviour
 
     //удаление совпадений
 
-    public virtual void OnMatch()
+    public virtual void OnMatch() //анимация удаления фишки с частицами.
     {
         // Создаём 6 частиц (брызг)
         for (int i = 0; i < 6; i++)
@@ -64,29 +64,29 @@ public class Cell : MonoBehaviour
             });
     }
 
-    public virtual void OnSwap()
+    public virtual void OnSwap() //лог обмена (заглушка).
     {
         Debug.Log($"Cell [{row},{col}] участвует в обмене");
         // Здесь эффекты обмена: мигание, звук
     }
 
-    public void SetSpriteAndType(Sprite sprite, GemType type)
+    public void SetSpriteAndType(Sprite sprite, GemType type) // установка спрайта и типа.
     {
         Type = type;                 // запоминаем тип
         spriteRenderer.sprite = sprite;  // ставим картинку
     }
 
-    public Sprite GetSprite()
+    public Sprite GetSprite() // получение спрайта.
     {
         return spriteRenderer != null ? spriteRenderer.sprite : null;
     }
 
-    void OnMouseDown()
+    void OnMouseDown() // вызов события клика.
     {
         Vector2Int myPos = new Vector2Int(row, col);
         GameManager.Instance.OnCellClicked.Invoke(myPos);  // ✅ СОБЫТИЕ!
     }
-    protected IEnumerator ScaleDestroy(float duration)
+    protected IEnumerator ScaleDestroy(float duration) // корутина уменьшения масштаба 
     {
         Vector3 startScale = transform.localScale;
         float elapsed = 0;

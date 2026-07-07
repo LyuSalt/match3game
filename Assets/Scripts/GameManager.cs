@@ -7,6 +7,7 @@ using System;
 using DG.Tweening;
 using Random = UnityEngine.Random;
 
+//ОБЪЯВЛЕНИЕ КАСТОМНЫХ СОБЫТИЙ
 [System.Serializable] // сделать видимым в инспекторе
 public class Vector2IntEvent : UnityEvent<Vector2Int> { }
 [System.Serializable]
@@ -16,6 +17,7 @@ public class Vector2IntListEvent : UnityEvent<List<Vector2Int>> { }
 [System.Serializable]
 public class BombExplodedEvent : UnityEvent<Vector2Int, List<Vector2Int>> { }
 
+// Главный менеджер игры. Управляет полем, матчами, анимациями, событиями и переходами.
 public class GameManager : MonoBehaviour
 {
     public static GameManager Instance { get; private set; }
@@ -36,12 +38,12 @@ public class GameManager : MonoBehaviour
     public Vector2IntEvent OnCellClicked;           // Клик [i,j]
     public Vector2Int2Event OnCellsSwapped;         // Обмен [pos1,pos2]
     public Vector2IntListEvent OnMatchFound;        // Матч!
-    public Vector2IntListEvent OnCellsToDelete;     // Удалить клетки
+    public Vector2IntListEvent OnCellsToDelete;     // Список клеток для удаления
     public BombExplodedEvent OnBombExploded;        //бомба взорвалась и задела клетки!
 
     // Данные игры
-    private Cell[,] cells;
-    private GameObject[,] cellObjects;
+    private Cell[,] cells; //массив клеток (логка)
+    private GameObject[,] cellObjects; //массив объектов (визуал)
     public List<(int, int)> cellsToDelete = new List<(int, int)>();
     private bool isAnimating = false; // блокировка кликов и действий
 
@@ -49,6 +51,7 @@ public class GameManager : MonoBehaviour
     private Vector2Int firstSelectedPos = new Vector2Int(-1, -1); // первая выбранная клетка, пока тут несуществующие координаты
     private GameObject firstSelectedObject = null; //визуальный объект по этим координатам
 
+    //жизненный цикл
     void Awake()
     {
         if (Instance == null)
@@ -62,7 +65,7 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    void Start()
+    void Start() // Инициализация поля и подписка на событие клика.
     {
         Debug.Log("Игра началась!");
         InitializeBoard();
@@ -74,7 +77,7 @@ public class GameManager : MonoBehaviour
         }
     
     }
-    void CreateVisualBoardWithoutMatches()
+    void CreateVisualBoardWithoutMatches() // Создаёт поле без начальных матчей (повторяет генерацию до 50 раз).
     {
         int attempts = 0;
         while (attempts < 50)
@@ -86,13 +89,12 @@ public class GameManager : MonoBehaviour
         }
         Debug.Log($"Поле готово за {attempts} попыток");
     }
-    void InitializeBoard()
+    void InitializeBoard() // Инициализирует пустые массивы под размер поля.
     {
         cells = new Cell[rows, columns];
         cellObjects = new GameObject[rows, columns];
     }
-
-    void CreateVisualBoard()
+    void CreateVisualBoard() // Заполняет поле случайными фишками с назначением спрайтов и типов.
     {
         for (int i = 0; i < rows; i++)
         {
@@ -125,7 +127,7 @@ public class GameManager : MonoBehaviour
             }
         }
     }
-    private void SyncCellsWithObjects()
+    private void SyncCellsWithObjects() // Синхронизирует массивы cells и cellObjects после перетасовки объектов.
     {
         for (int i = 0; i < rows; i++)
         {
@@ -144,7 +146,7 @@ public class GameManager : MonoBehaviour
             }
         }
     }
-    void OnCellClickedEvent(Vector2Int position)
+    void OnCellClickedEvent(Vector2Int position) // Событие клика по клетке: выбор первой, проверка соседства, обмен, проверка матча.
     {
         if (isAnimating) return; // если идёт анимация – игнорируем клики
         int row = position.x, col = position.y;
@@ -205,7 +207,7 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    private IEnumerator AnimatedSwap(int r1, int c1, int r2, int c2, float duration = 0.15f)
+    private IEnumerator AnimatedSwap(int r1, int c1, int r2, int c2, float duration = 0.15f) // Анимирует обмен двух клеток с перемещением по позициям.
     {
         // Получаем объекты
         GameObject obj1 = cellObjects[r1, c1];
@@ -241,7 +243,7 @@ public class GameManager : MonoBehaviour
         cellObjects[r1, c1].transform.position = new Vector3(c1 * cellSpacing, r1 * cellSpacing, 0);
         cellObjects[r2, c2].transform.position = new Vector3(c2 * cellSpacing, r2 * cellSpacing, 0);
     }
-    private void ShuffleObjects()
+    private void ShuffleObjects() // Перемешивает объекты в массиве cellObjects (меняет местами).
     {
         // Собираем все объекты в список
         List<GameObject> objectsList = new List<GameObject>();
@@ -289,7 +291,7 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    private Vector3 FindObjectPosition(GameObject obj)
+    private Vector3 FindObjectPosition(GameObject obj) // Находит новую позицию объекта в массиве cellObjects.
     {
         for (int i = 0; i < rows; i++)
         {
@@ -303,7 +305,7 @@ public class GameManager : MonoBehaviour
         }
         return Vector3.zero;
     }
-    private IEnumerator ShuffleBoardCoroutine()
+    private IEnumerator ShuffleBoardCoroutine() // Корутина полной перетасовки поля (сборка в центр → встряска → разброс).
     {
         isAnimating = true;
 
@@ -401,7 +403,7 @@ public class GameManager : MonoBehaviour
 
         isAnimating = false;
     }
-    private void ShuffleTypes()
+    private void ShuffleTypes() // Перемешивает типы фишек (GemType) между ячейками.
     {
         // Собираем все типы в список
         List<GemType> allTypes = new List<GemType>();
@@ -440,14 +442,14 @@ public class GameManager : MonoBehaviour
             }
         }
     }
-    bool IsAdjacent(int row1, int col1, int row2, int col2)
+    bool IsAdjacent(int row1, int col1, int row2, int col2) // Проверяет, являются ли клетки соседними (по горизонтали или вертикали).
     {
         int rowDiff = Mathf.Abs(row1 - row2);
         int colDiff = Mathf.Abs(col1 - col2);
         return (rowDiff == 1 && colDiff == 0) || (rowDiff == 0 && colDiff == 1);
     }
 
-    void SwapCellObjects(int row1, int col1, int row2, int col2)
+    void SwapCellObjects(int row1, int col1, int row2, int col2) // Меняет местами клетки (обновляет массивы и позиции объектов).
     {
         // Меняем ссылки
         Cell buf = cells[row1, col1];
@@ -472,17 +474,8 @@ public class GameManager : MonoBehaviour
     bool CheckAfterSwap(Vector2Int aPos, Vector2Int bPos)
     {
         return FindAllMatches().Count > 0;
-        //bool matchA = CheckMatchesAt(aPos.x, aPos.y);
-        //bool matchB = CheckMatchesAt(bPos.x, bPos.y);
-
-        // сюда позже можно добавить проверку бомб:
-        // bool bombA = IsBombAt(aPos.x, aPos.y);
-        // bool bombB = IsBombAt(bPos.x, bPos.y);
-
-        //return matchA || matchB;
-    }
-    // ✅ ПОИСК ВСЕХ МАТЧЕЙ НА ДОСКЕ
-    public List<Vector2Int> FindAllMatches()
+    } // Проверяет, есть ли матчи после обмена.
+    public List<Vector2Int> FindAllMatches() // Находит все матчи на доске (группы из 3+ одинаковых фишек).
     {
         List<Vector2Int> matches = new List<Vector2Int>();
         HashSet<Vector2Int> visited = new HashSet<Vector2Int>();
@@ -506,7 +499,7 @@ public class GameManager : MonoBehaviour
         return matches;
     }
 
-    private List<Vector2Int> GetMatchGroup(int centerRow, int centerCol)
+    private List<Vector2Int> GetMatchGroup(int centerRow, int centerCol) // Находит группу одинаковых фишек, начиная с центральной клетки.
     {
         List<Vector2Int> group = new List<Vector2Int>();
         GemType centerType = cells[centerRow, centerCol].Type;
@@ -518,7 +511,7 @@ public class GameManager : MonoBehaviour
         return group;
     }
 
-    private void CheckHorizontalLine(int row, int startCol, GemType type, List<Vector2Int> group)
+    private void CheckHorizontalLine(int row, int startCol, GemType type, List<Vector2Int> group) // Проверяет горизонтальную линию от центральной клетки.
     {
         int leftCount = 0, rightCount = 0;
         for (int c = startCol - 1; c >= 0; c--)
@@ -538,7 +531,7 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    private void CheckVerticalLine(int startRow, int col, GemType type, List<Vector2Int> group)
+    private void CheckVerticalLine(int startRow, int col, GemType type, List<Vector2Int> group)// Проверяет вертикальную линию от центральной клетки.
     {
         int upCount = 0, downCount = 0;
         for (int r = startRow - 1; r >= 0; r--)
@@ -557,7 +550,7 @@ public class GameManager : MonoBehaviour
                 group.Add(new Vector2Int(r, col));
         }
     }
-    bool HasValidMoves()
+    bool HasValidMoves() // Проверяет, есть ли хотя бы один допустимый обмен, приводящий к матчу.
     {
         for (int row = 0; row < rows; row++)
             for (int col = 0; col < columns; col++)
@@ -569,7 +562,7 @@ public class GameManager : MonoBehaviour
         return false;
     }
 
-    bool IsSwapValid(int r1, int c1, int r2, int c2)
+    bool IsSwapValid(int r1, int c1, int r2, int c2) // Проверяет, даст ли обмен двух клеток матч.
     {
         GemType t1 = cells[r1, c1].Type, t2 = cells[r2, c2].Type;
         cells[r1, c1].Type = t2; cells[r2, c2].Type = t1;  // свап
@@ -578,7 +571,7 @@ public class GameManager : MonoBehaviour
         return match;
     }
 
-    // ✅ ГЛАВНЫЙ МЕТОД: обработка матчей после свапа
+    // ✅ ГЛАВНЫЙ МЕТОД: обработка матчей после свапа. вызывает удаление, запускает корутину DeleteAndRefill.
     public void ProcessMatchesAfterSwap()
     {
         List<Vector2Int> matches = FindAllMatches();
@@ -598,7 +591,7 @@ public class GameManager : MonoBehaviour
         StartCoroutine(DeleteAndRefill(matches));
     }
 
-    private IEnumerator DeleteAndRefill(List<Vector2Int> positions)
+    private IEnumerator DeleteAndRefill(List<Vector2Int> positions) // Удаляет отмеченные клетки и запускает заполнение пустот.
     {
         // Ждём, пока анимации удаления завершатся
         yield return new WaitForSeconds(0.5f); // можно подобрать точнее
@@ -625,7 +618,7 @@ public class GameManager : MonoBehaviour
         yield return StartCoroutine(FillEmptyCells());
     }
 
-    private IEnumerator FillEmptyCells()
+    private IEnumerator FillEmptyCells() // Заполняет пустые клетки: гравитация (падение вниз) и создание новых сверху.
     {
         // Гравитация
         bool moved = true;
@@ -693,7 +686,7 @@ public class GameManager : MonoBehaviour
         }
     }
     
-    private void CreateNewCell(int row, int col)
+    private void CreateNewCell(int row, int col) // Создаёт новую клетку с случайным типом и спрайтом.
     {
         GameObject cellObj = Instantiate(cellPrefab);
         cellObjects[row, col] = cellObj;
@@ -714,7 +707,7 @@ public class GameManager : MonoBehaviour
         cells[row, col] = cell;
     }
 
-    private IEnumerator AnimateFall(Transform obj, Vector3 targetPos, float duration)
+    private IEnumerator AnimateFall(Transform obj, Vector3 targetPos, float duration) // Анимация падения объекта вниз (простая интерполяция).
     {
         Vector3 startPos = obj.position;
         float elapsed = 0;
@@ -738,15 +731,8 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    void ResetSelection()
+    void ResetSelection() // Сбрасывает выбор клеток (убирает масштабирование).
     {
-        //if (firstSelectedObject != null)
-        //{
-        //    firstSelectedObject.transform.localScale = Vector3.one;
-        //    firstSelectedPos = new Vector2Int(-1, -1);
-        //    firstSelectedObject = null;
-
-        //}
         if (firstSelectedObject != null)
         {
             // ✅ ПРОВЕРКА живой ли объект перед масштабированием
@@ -770,7 +756,7 @@ public class GameManager : MonoBehaviour
         firstSelectedPos = new Vector2Int(-1, -1);
     }
 
-    void ClearBoard()
+    void ClearBoard() // Полностью очищает поле (удаляет все объекты).
     {
         ResetSelection();
         cellsToDelete.Clear();
