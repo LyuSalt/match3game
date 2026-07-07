@@ -43,8 +43,8 @@ public class BombCell : Cell
         {
             for (int c = col - (int)explosionRadius; c <= col + (int)explosionRadius; c++)
             {
-                if (r >= 0 && r < GameManager.Instance.rows &&
-                    c >= 0 && c < GameManager.Instance.columns)
+                if (r >= 0 && r < GameManager.Instance.boardManager.rows &&
+                    c >= 0 && c < GameManager.Instance.boardManager.columns)
                 {
                     if (r == row && c == col) continue;
                     cellsToDestroy.Add(new Vector2Int(r, c));
