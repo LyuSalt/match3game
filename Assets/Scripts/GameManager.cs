@@ -305,15 +305,12 @@ public class GameManager : MonoBehaviour
         }
         return Vector3.zero;
     }
-    private IEnumerator ShuffleBoardCoroutine() // Корутина полной перетасовки поля (сборка в центр → встряска → разброс).
+    private IEnumerator ShuffleBoardCoroutine() // Корутина полной перетасовки поля
     {
         isAnimating = true;
 
-        // 1. Сохраняем все объекты и их текущие позиции
+        // 1. Собираем все объекты и отключаем коллайдеры
         List<GameObject> allObjects = new List<GameObject>();
-        Vector3 centerPos = new Vector3((columns - 1) * cellSpacing / 2f,
-                                        (rows - 1) * cellSpacing / 2f, 0);
-
         for (int i = 0; i < rows; i++)
         {
             for (int j = 0; j < columns; j++)
@@ -321,81 +318,57 @@ public class GameManager : MonoBehaviour
                 if (cellObjects[i, j] != null)
                 {
                     allObjects.Add(cellObjects[i, j]);
-                    // Отключаем коллайдеры, чтобы игрок не кликал во время анимации
                     Collider2D col = cellObjects[i, j].GetComponent<Collider2D>();
                     if (col != null) col.enabled = false;
                 }
             }
         }
 
-        // 2. Анимация СБОРКИ в центр
+        // 2. Все фишки сжимаются до нуля (исчезают)
         foreach (var obj in allObjects)
         {
-            obj.transform.DOMove(centerPos, 0.4f)
-                .SetEase(Ease.InQuad);
+            obj.transform.DOScale(0f, 0.2f).SetEase(Ease.InBack);
         }
+        yield return new WaitForSeconds(0.25f);
 
-        yield return new WaitForSeconds(0.5f); // Ждём, пока все соберутся
-
-        // 3. ВСТРЯСКА (трясём каждый объект)
-        foreach (var obj in allObjects)
-        {
-            obj.transform.DOShakePosition(0.3f, 0.3f, 10, 90, false, true)
-                .SetEase(Ease.OutQuad);
-        }
-
-        // Даём немного времени на встряску
-        yield return new WaitForSeconds(0.4f);
-
-        // 4. Перемешиваем ТИПЫ фишек (логика)
-        ShuffleTypes();
-
-        // 5. Анимация РАЗБРОСА по новым позициям
-        // Для каждого объекта определяем новую позицию на основе обновлённых массивов
-        foreach (var obj in allObjects)
-        {
-            // Находим, где сейчас лежит этот объект в массиве (после перемешивания типов позиции не изменились)
-            // Но нам нужно, чтобы объект переместился на новое место, соответствующее новому типу?
-            // В нашей логике мы просто перемешали типы, но объекты остались на своих местах.
-            // Однако для эффекта "разброса" мы хотим, чтобы объекты физически перелетели на другие места,
-            // т.е. мы должны перемешать сами объекты между ячейками.
-            // Проще: мы можем перемешать объекты в массивах, а затем анимировать их перемещение.
-        }
-
-        // Поскольку мы перемешали только типы, а объекты остались на месте, то разброс не даст эффекта.
-        // Поэтому нам нужно также перемешать объекты между ячейками, чтобы они поменялись местами.
-        // Сделаем это:
-        ShuffleObjects();
+        // 3. Перемешиваем логику (типы и объекты)
+        ShuffleTypes();       // меняем типы и спрайты
+        ShuffleObjects();     // перемешиваем объекты
         SyncCellsWithObjects();
-        // Теперь объекты привязаны к новым позициям, анимируем их перемещение из центра в новые позиции.
+
+        // 4. Все фишки появляются обратно с увеличением, с небольшой задержкой (волна)
+        float delay = 0f;
         foreach (var obj in allObjects)
         {
+            // Находим целевую позицию (уже новую)
             Vector3 targetPos = FindObjectPosition(obj);
-            float delay = UnityEngine.Random.Range(0f, 0.1f);
-            obj.transform.DOMove(targetPos, 0.4f)
+            obj.transform.position = targetPos; // сразу ставим на место, чтобы не летали
+            obj.transform.localScale = Vector3.zero; // сбрасываем масштаб
+            obj.transform.DOScale(Vector3.one, 0.25f)
                 .SetDelay(delay)
-                .SetEase(Ease.OutBack); // пружинистый эффект
+                .SetEase(Ease.OutBack);
+            delay += 0.03f; // задержка между фишками
         }
 
-        yield return new WaitForSeconds(0.6f); // Ждём завершения разброса
+        yield return new WaitForSeconds(0.4f + delay);
 
-        // 6. Включаем коллайдеры обратно
+        // 5. Включаем коллайдеры обратно
         foreach (var obj in allObjects)
         {
             Collider2D col = obj.GetComponent<Collider2D>();
             if (col != null) col.enabled = true;
         }
 
-        // 7. Проверяем наличие матчей после перемешивания
+        // 6. Проверяем матчи (как обычно)
         List<Vector2Int> matches = FindAllMatches();
         if (matches.Count > 0)
         {
             Debug.Log("Перемешивание создало матчи!");
-            ProcessMatchesAfterSwap(); // запускаем каскад
+            ProcessMatchesAfterSwap();
         }
         else
         {
-            // Если матчей нет – пробуем ещё раз или перегенерируем
+            // Если матчей нет – перегенерируем заново (защита от бесконечного цикла)
             Debug.Log("Матчей не появилось, перегенерируем поле.");
             ClearBoard();
             CreateVisualBoardWithoutMatches();
